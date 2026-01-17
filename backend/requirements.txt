@@ -9,7 +9,7 @@ langchain-community
 langchain-core
 langchain-text-splitters
 typesense
-duckduckgo-search
+duckduckgo-search>=6.2.11
 langchain-classic
 python-dotenv
 PyPDF2

@@ -55,6 +55,15 @@ embeddings = RemoteEmbeddings(HF_SPACE_URL)
 
 app = FastAPI()
 
+# --- INITIALIZE TOOLS ONCE (GLOBAL) ---
+try:
+    from langchain_community.tools import DuckDuckGoSearchRun
+    ddg_tool_instance = DuckDuckGoSearchRun()
+    print("✅ DuckDuckGo Web Search Tool Initialized.")
+except Exception as e:
+    print(f"⚠️ Web Search Tool failed to load: {e}")
+    ddg_tool_instance = None
+
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
@@ -270,18 +279,21 @@ async def chat_endpoint(request: ChatRequest):
         internal_tool = None
 
     # External Tool
-    ddg = DuckDuckGoSearchRun()
-    external_tool = StructuredTool.from_function(
-        name="search_web",
-        description="Searches the web for general knowledge, news, or facts NOT present in the user's documents.",
-        func=lambda q: ddg.invoke(q)
-    )
+    if ddg_tool_instance:
+        external_tool = StructuredTool.from_function(
+            name="search_web",
+            description="Searches the web for general knowledge, news, or facts NOT present in the user's documents.",
+            func=lambda q: ddg_tool_instance.invoke(q)
+        )
+    else:
+        external_tool = None
 
-    # Select Tools based on User Toggle
     tools = [internal_tool]
-    if request.use_web:
+    if request.use_web and external_tool:
         tools.append(external_tool)
         print("🌐 Web Search Enabled for this request.")
+    elif request.use_web and not external_tool:
+        print("⚠️ Web Search requested but tool is unavailable.")
     else:
         print("📄 Document Search ONLY for this request.")
 
