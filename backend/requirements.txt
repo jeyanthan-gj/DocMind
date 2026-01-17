@@ -10,6 +10,7 @@ langchain-core
 langchain-text-splitters
 typesense
 duckduckgo-search>=6.2.11
+ddgs
 langchain-classic
 python-dotenv
 PyPDF2
