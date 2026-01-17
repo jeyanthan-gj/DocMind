@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+pydantic
+supabase
+langchain
+langchain-groq
+langchain-huggingface
+langchain-community
+langchain-core
+langchain-text-splitters
+typesense
+duckduckgo-search
+langchain-classic
+python-dotenv
+PyPDF2
+python-multipart

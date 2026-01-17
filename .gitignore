@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+.gemini/
