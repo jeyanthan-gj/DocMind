@@ -14,3 +14,5 @@ langchain-classic
 python-dotenv
 PyPDF2
 python-multipart
+sentence-transformers
+torch --index-url https://download.pytorch.org/whl/cpu
