@@ -41,12 +41,20 @@ class RemoteEmbeddings(Embeddings):
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         # Remote call to the Gradio API
-        result = self.client.predict(texts, api_name="/predict")
-        return result
+        try:
+            result = self.client.predict(texts, api_name="/predict")
+            return result
+        except Exception as e:
+            print(f"❌ HF Embedding Error (Docs): {e}")
+            raise e
 
     def embed_query(self, text: str) -> List[float]:
-        result = self.client.predict([text], api_name="/predict")
-        return result[0]
+        try:
+            result = self.client.predict([text], api_name="/predict")
+            return result[0]
+        except Exception as e:
+            print(f"❌ HF Embedding Error (Query): {e}")
+            raise e
 
 # Initialize Remote Embeddings
 # You will set HF_SPACE_URL in your Supabase 'system_settings' or Render Env
@@ -333,7 +341,7 @@ async def chat_endpoint(request: ChatRequest):
         verbose=True, 
         handle_parsing_errors=True,
         max_iterations=10,
-        early_stopping_method="generate"
+        early_stopping_method="force"
     )
 
     try:

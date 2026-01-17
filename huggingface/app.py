@@ -11,13 +11,11 @@ def get_embeddings(texts):
     return embeddings.tolist()
 
 # Define Gradio interface
-iface = gr.Interface(
-    fn=get_embeddings,
-    inputs=gr.JSON(label="Input list of strings"),
-    outputs=gr.JSON(label="Embeddings"),
-    title="DocMind Embedding API",
-    description="Dedicated embedding service for DocMind RAG."
-)
+with gr.Blocks() as iface:
+    input_list = gr.JSON(label="Input list of strings")
+    output_list = gr.JSON(label="Embeddings")
+    btn = gr.Button("Embed")
+    btn.click(fn=get_embeddings, inputs=input_list, outputs=output_list, api_name="predict")
 
 if __name__ == "__main__":
     iface.launch()
