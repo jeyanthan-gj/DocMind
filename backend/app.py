@@ -241,41 +241,33 @@ async def chat_endpoint(request: ChatRequest):
             try:
                 is_summary = any(kw in query.lower() for kw in ["summary", "summarize", "overview", "all"])
                 
-                # --- ADVANCED QUERY EXPANSION ---
-                if is_summary:
-                    # For a summary, we ask the LLM to identify the "likely core themes" to search for
-                    extraction_prompt = f"Identify 3-5 main research topics or keywords that would be in a document related to: '{query}'. Return only the keywords separated by commas."
-                    expansion = llm.invoke(extraction_prompt).content
-                    search_query = f"{query}, {expansion}"
-                else:
-                    # For specific questions, expand with synonyms and technical terms
-                    expansion_prompt = f"Expand this query into 5 technical keywords to improve document retrieval: '{query}'. Return only the keywords separated by commas."
-                    expansion = llm.invoke(expansion_prompt).content
-                    search_query = f"{query}, {expansion}"
+                # --- ADVANCED QUERY EXPANSION (STRICT) ---
+                try:
+                    expand_prompt = [
+                        ("system", "You are a keyword extractor. Return ONLY keywords separated by commas. No conversational filler."),
+                        ("human", f"Topics for: '{query}'")
+                    ]
+                    expansion = llm.invoke(expand_prompt).content
+                    # Clean the output: remove quotes, newlines, and common filler
+                    clean_expansion = expansion.replace("\n", ", ").replace('"', "").strip()
+                    search_query = f"{query}, {clean_expansion}"
+                except:
+                    search_query = query
                 
                 print(f"🚀 Expanded Search Query: {search_query}")
 
-                # Fetch FEWER documents to avoid Groq's low TPM limits (6000 tokens)
-                search_k = 10 if is_summary else 4
+                # Fetch documents
+                search_k = 10 if is_summary else 5
                 docs = vector_db.similarity_search(search_query, k=search_k, filter_by=f"user_id:={request.user_id}")
                 
                 if not docs:
-                    # Final fallback: generic search to at least get something (still filtered)
-                    print("⚠️ No results for expanded query, trying generic search...")
-                    docs = vector_db.similarity_search(
-                        "research findings technical details", 
-                        k=10,
-                        filter_by=f"user_id:={request.user_id}"
-                    )
-
-                if not docs:
-                    return "Zero snippets retrieved. The document may not be indexed or is empty."
+                    return "No relevant information found in your documents for this query."
                 
                 print(f"🎯 Retrieved {len(docs)} snippets.")
                 return format_results_as_toon(docs)
             except Exception as e:
                 print(f"❌ Search Error: {e}")
-                return f"Internal search failure: {str(e)}"
+                return "Failed to search documents due to an internal error."
 
         internal_tool = StructuredTool.from_function(
             name="search_internal_documents",
@@ -309,25 +301,18 @@ async def chat_endpoint(request: ChatRequest):
     today = datetime.date.today().strftime("%B %d, %Y")
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", f"""You are DocMind, an expert research assistant. Date: {today}.
+        ("system", f"""You are DocMind, an expert AI research assistant. Date: {today}.
         
-        IDENTITY CONTEXT:
+        IDENTITY:
         - Your Name: DocMind
         - User's Name: {user_name}
         
-        STRICT OPERATING RULES:
-        1. IF the user asks "who am I?", "what is my name?", or greets you, ANSWER using the IDENTITY CONTEXT. DO NOT use tools.
-        
-        2. TOOL USAGE:
-           - You are provided with tools based on a user-selected mode.
-           - If 'search_web' is available, use it for facts NOT in the document.
-           - If ONLY 'search_internal_documents' is available, you MUST NOT ask for web search. 
-        
-        3. IF 'search_internal_documents' is used and returns nothing, do not apologize for lack of web search unless 'search_web' is actually available.
-        
-        4. ONCE YOU FIND THE ANSWER, STOP.
-        
-        5. Formatting: Use Markdown (## Headers, **bold**, - lists).
+        STRICT RULES:
+        1. IF the user greets you or asks about your/their identity, answer DIRECTLY without using tools.
+        2. DO NOT use the same tool multiple times for the same question. If the first search gives no results, explain that you couldn't find the info.
+        3. IF 'search_internal_documents' returns nothing, do NOT hallucinate info. State clearly: "I couldn't find that in your documents."
+        4. Use 'search_web' ONLY if enabled AND if the info is not in the documents.
+        5. Provide concise, well-formatted Markdown responses.
         """),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
@@ -340,7 +325,7 @@ async def chat_endpoint(request: ChatRequest):
         tools=tools, 
         verbose=True, 
         handle_parsing_errors=True,
-        max_iterations=10,
+        max_iterations=8,
         early_stopping_method="force"
     )
 
