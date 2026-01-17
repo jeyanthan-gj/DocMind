@@ -50,7 +50,7 @@ class RemoteEmbeddings(Embeddings):
 
 # Initialize Remote Embeddings
 # You will set HF_SPACE_URL in your Supabase 'system_settings' or Render Env
-HF_SPACE_URL = os.environ.get("HF_SPACE_URL", "https://your-space-name.hf.space") 
+HF_SPACE_URL = os.environ.get("HF_SPACE_URL", "jeyanthangj2004/docmind-embeddings") 
 embeddings = RemoteEmbeddings(HF_SPACE_URL)
 
 app = FastAPI()
