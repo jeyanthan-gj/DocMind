@@ -241,16 +241,11 @@ async def chat_endpoint(request: ChatRequest):
             try:
                 is_summary = any(kw in query.lower() for kw in ["summary", "summarize", "overview", "all"])
                 
-                # --- ADVANCED QUERY EXPANSION (STRICT) ---
+                # --- ROBUST QUERY EXPANSION ---
                 try:
-                    expand_prompt = [
-                        ("system", "You are a keyword extractor. Return ONLY keywords separated by commas. No conversational filler."),
-                        ("human", f"Topics for: '{query}'")
-                    ]
+                    expand_prompt = f"Convert this query into a comma-separated list of 5 technical research keywords: '{query}'. Return ONLY the keywords."
                     expansion = llm.invoke(expand_prompt).content
-                    # Clean the output: remove quotes, newlines, and common filler
-                    clean_expansion = expansion.replace("\n", ", ").replace('"', "").strip()
-                    search_query = f"{query}, {clean_expansion}"
+                    search_query = f"{query}, {expansion}"
                 except:
                     search_query = query
                 
@@ -261,13 +256,13 @@ async def chat_endpoint(request: ChatRequest):
                 docs = vector_db.similarity_search(search_query, k=search_k, filter_by=f"user_id:={request.user_id}")
                 
                 if not docs:
-                    return "No relevant information found in your documents for this query."
+                    return "TOON_ERROR: No matching documents found for this user."
                 
                 print(f"🎯 Retrieved {len(docs)} snippets.")
                 return format_results_as_toon(docs)
             except Exception as e:
                 print(f"❌ Search Error: {e}")
-                return "Failed to search documents due to an internal error."
+                return "TOON_ERROR: Internal search system failure."
 
         internal_tool = StructuredTool.from_function(
             name="search_internal_documents",
@@ -300,19 +295,21 @@ async def chat_endpoint(request: ChatRequest):
     history = get_chat_history(request.session_id)
     today = datetime.date.today().strftime("%B %d, %Y")
 
+    # Build dynamic prompt instructions
+    web_instruction = "You can use 'search_web' for general facts." if request.use_web else "DO NOT attempt to use 'search_web'. It is disabled."
+
     prompt = ChatPromptTemplate.from_messages([
-        ("system", f"""You are DocMind, an expert AI research assistant. Date: {today}.
+        ("system", f"""You are DocMind, a research AI. Date: {today}.
         
-        IDENTITY:
-        - Your Name: DocMind
-        - User's Name: {user_name}
+        CONTEXT:
+        - User: {user_name}
+        - Mode: {"Research + Web" if request.use_web else "Document Research ONLY"}
         
-        STRICT RULES:
-        1. IF the user greets you or asks about your/their identity, answer DIRECTLY without using tools.
-        2. DO NOT use the same tool multiple times for the same question. If the first search gives no results, explain that you couldn't find the info.
-        3. IF 'search_internal_documents' returns nothing, do NOT hallucinate info. State clearly: "I couldn't find that in your documents."
-        4. Use 'search_web' ONLY if enabled AND if the info is not in the documents.
-        5. Provide concise, well-formatted Markdown responses.
+        RULES:
+        1. {web_instruction}
+        2. Use 'search_internal_documents' for ANY question about uploaded files.
+        3. If a tool returns 'TOON_ERROR', stop and tell the user the info is missing.
+        4. Provide responses in clean Markdown (headers, lists).
         """),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
@@ -325,7 +322,7 @@ async def chat_endpoint(request: ChatRequest):
         tools=tools, 
         verbose=True, 
         handle_parsing_errors=True,
-        max_iterations=8,
+        max_iterations=5,
         early_stopping_method="force"
     )
 
