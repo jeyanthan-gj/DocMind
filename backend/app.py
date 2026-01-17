@@ -13,7 +13,8 @@ import typesense
 
 # LangChain Imports
 from langchain_groq import ChatGroq
-from langchain_huggingface import HuggingFaceEmbeddings
+from gradio_client import Client as GradioClient
+from langchain_core.embeddings import Embeddings
 from langchain_community.vectorstores import Typesense
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import StructuredTool
@@ -32,8 +33,25 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-# Initialize Embeddings once (CPU efficient)
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# --- REMOTE EMBEDDING CLASS ---
+class RemoteEmbeddings(Embeddings):
+    """Calls your specialized Hugging Face Space for embeddings."""
+    def __init__(self, space_url: str):
+        self.client = GradioClient(space_url)
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        # Remote call to the Gradio API
+        result = self.client.predict(texts, api_name="/predict")
+        return result
+
+    def embed_query(self, text: str) -> List[float]:
+        result = self.client.predict([text], api_name="/predict")
+        return result[0]
+
+# Initialize Remote Embeddings
+# You will set HF_SPACE_URL in your Supabase 'system_settings' or Render Env
+HF_SPACE_URL = os.environ.get("HF_SPACE_URL", "https://your-space-name.hf.space") 
+embeddings = RemoteEmbeddings(HF_SPACE_URL)
 
 app = FastAPI()
 
