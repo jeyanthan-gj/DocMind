@@ -126,6 +126,9 @@ const Chat = () => {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('user_id', user.id)
+        if (currentSession?.id) {
+            formData.append('session_id', currentSession.id)
+        }
 
         setIsLoading(true)
         toast({ title: "Uploading...", description: `Processing ${file.name}` })

@@ -149,7 +149,11 @@ def format_results_as_toon(docs):
 # --- ENDPOINTS ---
 
 @app.post("/upload")
-async def upload_document(file: UploadFile = File(...), user_id: str = Form(...)):
+async def upload_document(
+    file: UploadFile = File(...), 
+    user_id: str = Form(...),
+    session_id: str = Form(None)
+):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
     
@@ -193,10 +197,10 @@ async def upload_document(file: UploadFile = File(...), user_id: str = Form(...)
             text_key="content"
         )
 
-        # 4. Ingest with user_id metadata
-        metadatas = [{"source": file.filename, "user_id": user_id}] * len(chunks)
+        # 4. Ingest with user_id AND session_id metadata
+        metadatas = [{"source": file.filename, "user_id": user_id, "session_id": session_id or "global"}] * len(chunks)
         vector_db.add_texts(chunks, metadatas=metadatas)
-        print(f"✅ Ingested {len(chunks)} chunks for user {user_id}.")
+        print(f"✅ Ingested {len(chunks)} chunks for user {user_id} in session {session_id or 'global'}.")
         
         return {"status": "success", "message": f"Successfully processed {file.filename}"}
     except Exception as e:
@@ -260,9 +264,12 @@ async def chat_endpoint(request: ChatRequest):
                 
                 print(f"🚀 Expanded Search Query: {search_query}")
 
-                # Fetch documents
+                # Fetch documents - Strict Session Isolation
                 search_k = 10 if is_summary else 5
-                docs = vector_db.similarity_search(search_query, k=search_k, filter_by=f"user_id:={request.user_id}")
+                
+                # We filter by user_id and session_id (or global)
+                filter_str = f"user_id:={request.user_id} && (session_id:={request.session_id} || session_id:=global)"
+                docs = vector_db.similarity_search(search_query, k=search_k, filter_by=filter_str)
                 
                 if not docs:
                     return "TOON_ERROR: No matching documents found for this user."
@@ -317,12 +324,15 @@ async def chat_endpoint(request: ChatRequest):
         STRICT OPERATING RULES:
         1. GREETINGS & IDENTITY: If the user says 'hi', 'hello', or asks 'who am I?', answer DIRECTLY using the IDENTITY info above. DO NOT use any tools for these questions.
         
-        2. TOOL USAGE:
+        2. DOCUMENT KNOWLEDGE (STRICT): If the user asks about 'the document', 'this file', or 'summarise', you MUST call 'search_internal_documents'. 
+           - CRITICAL: DO NOT use your previous conversation history or general knowledge to answer questions about 'the document'.
+           - IF the search tool returns 'TOON_ERROR' or 'No matching documents', you MUST say: "I couldn't find any uploaded documents in this chat session."
+        
+        3. TOOL USAGE:
            {web_instruction}
            - Use 'search_internal_documents' only for questions about documents, files, or specific research data.
-           - If a tool returns 'TOON_ERROR', it means the data is missing. Inform the user gracefully.
         
-        3. FORMAT: Always use professional Markdown (headers, bullet points).
+        4. FORMAT: Always use professional Markdown (headers, bullet points).
         """),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
