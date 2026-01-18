@@ -42,7 +42,8 @@ class RemoteEmbeddings(Embeddings):
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         # Remote call to the Gradio API
         try:
-            result = self.client.predict(texts, api_name="/predict")
+            # Standard Gradio call - try without leading slash if slash fails
+            result = self.client.predict(texts, api_name="predict")
             return result
         except Exception as e:
             print(f"❌ HF Embedding Error (Docs): {e}")
@@ -50,7 +51,7 @@ class RemoteEmbeddings(Embeddings):
 
     def embed_query(self, text: str) -> List[float]:
         try:
-            result = self.client.predict([text], api_name="/predict")
+            result = self.client.predict([text], api_name="predict")
             return result[0]
         except Exception as e:
             print(f"❌ HF Embedding Error (Query): {e}")
@@ -222,6 +223,12 @@ async def chat_endpoint(request: ChatRequest):
         raise HTTPException(status_code=400, detail=f"Invalid Model: {e}")
 
     # Initialize Internal Search Tool
+    # --- IMMEDIATE GREETING CHECK (PREVENTS LOOPS) ---
+    lower_query = request.query.lower().strip().replace(".", "").replace("!", "")
+    greetings = ["hi", "hello", "hey", "who am i", "what is my name", "who are you"]
+    if lower_query in greetings:
+        return {"response": f"Hello {user_name}! I am DocMind, your research assistant. How can I help you with your documents today?"}
+
     try:
         ts_client = typesense.Client({
             'nodes': [{'host': typesense_host, 'port': '443', 'protocol': 'https'}],
@@ -241,11 +248,13 @@ async def chat_endpoint(request: ChatRequest):
             try:
                 is_summary = any(kw in query.lower() for kw in ["summary", "summarize", "overview", "all"])
                 
-                # --- ROBUST QUERY EXPANSION ---
+                # --- ROBUST QUERY EXPANSION (ULTRA-STRICT) ---
                 try:
-                    expand_prompt = f"Convert this query into a comma-separated list of 5 technical research keywords: '{query}'. Return ONLY the keywords."
+                    expand_prompt = f"Extract 5 technical search keywords from this query: '{query}'. Return ONLY the keywords separated by commas. No sentences. No filler."
                     expansion = llm.invoke(expand_prompt).content
-                    search_query = f"{query}, {expansion}"
+                    # Clean the output
+                    clean_expansion = "".join(c for c in expansion if c.isalnum() or c in ", ").strip()
+                    search_query = f"{query}, {clean_expansion}"
                 except:
                     search_query = query
                 
