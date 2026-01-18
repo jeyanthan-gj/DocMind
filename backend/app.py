@@ -42,20 +42,31 @@ class RemoteEmbeddings(Embeddings):
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         # Remote call to the Gradio API
         try:
-            # Re-adding leading slash as Gradio/HF requires it
-            result = self.client.predict(texts, api_name="/predict")
-            return result
+            # Try named endpoint first
+            return self.client.predict(texts, api_name="/predict")
         except Exception as e:
-            print(f"❌ HF Embedding Error (Docs): {e}")
-            raise e
+            print(f"⚠️ Named API /predict failed, trying fallback index 0: {e}")
+            try:
+                # Fallback to index 0
+                return self.client.predict(texts, fn_index=0)
+            except Exception as e2:
+                print(f"❌ HF Embedding Error (Docs) - Both methods failed: {e2}")
+                raise e2
 
     def embed_query(self, text: str) -> List[float]:
         try:
+            # Try named endpoint first
             result = self.client.predict([text], api_name="/predict")
             return result[0]
         except Exception as e:
-            print(f"❌ HF Embedding Error (Query): {e}")
-            raise e
+            print(f"⚠️ Named API /predict failed, trying fallback index 0: {e}")
+            try:
+                # Fallback to index 0
+                result = self.client.predict([text], fn_index=0)
+                return result[0]
+            except Exception as e2:
+                print(f"❌ HF Embedding Error (Query) - Both methods failed: {e2}")
+                raise e2
 
 # Initialize Remote Embeddings
 # You will set HF_SPACE_URL in your Supabase 'system_settings' or Render Env
