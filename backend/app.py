@@ -324,9 +324,11 @@ async def chat_endpoint(request: ChatRequest):
         STRICT OPERATING RULES:
         1. GREETINGS & IDENTITY: If the user says 'hi', 'hello', or asks 'who am I?', answer DIRECTLY using the IDENTITY info above. DO NOT use any tools for these questions.
         
-        2. DOCUMENT KNOWLEDGE (STRICT): If the user asks about 'the document', 'this file', or 'summarise', you MUST call 'search_internal_documents'. 
-           - CRITICAL: DO NOT use your previous conversation history or general knowledge to answer questions about 'the document'.
-           - IF the search tool returns 'TOON_ERROR' or 'No matching documents', you MUST say: "I couldn't find any uploaded documents in this chat session."
+        2. DOCUMENT KNOWLEDGE:
+           - You MUST call 'search_internal_documents' for questions about uploaded files.
+           - SUCCESS: If the tool returns text like `[filename.pdf] ... content ...`, USE THIS CONTENT to answer the question.
+           - FAILURE: Only if the tool returns 'TOON_ERROR' or 'No matching documents', then state: "I couldn't find any uploaded documents in this chat session."
+           - DO NOT use conversation history as a substitute for document content.
         
         3. TOOL USAGE:
            {web_instruction}
