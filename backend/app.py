@@ -42,8 +42,8 @@ class RemoteEmbeddings(Embeddings):
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         # Remote call to the Gradio API
         try:
-            # Standard Gradio call - try without leading slash if slash fails
-            result = self.client.predict(texts, api_name="predict")
+            # Re-adding leading slash as Gradio/HF requires it
+            result = self.client.predict(texts, api_name="/predict")
             return result
         except Exception as e:
             print(f"❌ HF Embedding Error (Docs): {e}")
@@ -51,7 +51,7 @@ class RemoteEmbeddings(Embeddings):
 
     def embed_query(self, text: str) -> List[float]:
         try:
-            result = self.client.predict([text], api_name="predict")
+            result = self.client.predict([text], api_name="/predict")
             return result[0]
         except Exception as e:
             print(f"❌ HF Embedding Error (Query): {e}")
