@@ -389,14 +389,14 @@ const Chat = () => {
                     <div className="max-w-3xl mx-auto">
                         <form onSubmit={handleSendMessage} className="relative group">
                             <div className="relative flex items-center ring-1 ring-gray-200 focus-within:ring-gray-300 shadow-lg shadow-gray-200/50 rounded-2xl bg-white transition-all overflow-hidden p-1">
-                                <label className="p-3 cursor-pointer text-gray-400 hover:text-gray-600 transition-colors tooltip" title="Upload Document">
+                                <label className={`p-3 cursor-pointer transition-colors tooltip ${useWeb ? 'opacity-30 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600'}`} title={useWeb ? "Upload disabled in Web Mode" : "Upload Document"}>
                                     <Paperclip className="w-5 h-5" />
                                     <input
                                         type="file"
                                         className="hidden"
                                         accept=".pdf"
                                         onChange={handleFileUpload}
-                                        disabled={isLoading}
+                                        disabled={isLoading || useWeb}
                                     />
                                 </label>
                                 <button
@@ -408,7 +408,7 @@ const Chat = () => {
                                     <Globe className={`w-5 h-5 ${useWeb ? 'animate-pulse' : ''}`} />
                                 </button>
                                 <textarea
-                                    placeholder="Message DocMind..."
+                                    placeholder={useWeb ? "Search the web..." : "Ask about your documents..."}
                                     className="flex-1 max-h-[200px] min-h-[52px] py-4 px-2 outline-none resize-none text-[15px] bg-transparent"
                                     value={input}
                                     onChange={e => setInput(e.target.value)}

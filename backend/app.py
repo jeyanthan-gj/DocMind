@@ -299,20 +299,23 @@ async def chat_endpoint(request: ChatRequest):
     else:
         external_tool = None
 
-    tools = [internal_tool]
-    if request.use_web and external_tool:
-        tools.append(external_tool)
-        print("🌐 Web Search Enabled for this request.")
-    elif request.use_web and not external_tool:
-        print("⚠️ Web Search requested but tool is unavailable.")
+    # --- STRICT TOOL EXCLUSIVITY ---
+    if request.use_web:
+        # WEB MODE: Only Web Search allowed. No document access.
+        tools = [external_tool] if external_tool else []
+        print("🌐 Mode: WEB SEARCH (Documents DISABLED)")
+        mode_context = "Mode: WEB SEARCH ONLY. You do NOT have access to user documents. Use 'search_web' for current information."
     else:
-        print("📄 Document Search ONLY for this request.")
+        # DOCUMENT MODE: Only Document Search allowed. No web access.
+        tools = [internal_tool] if internal_tool else []
+        print("📄 Mode: DOCUMENT SEARCH (Web DISABLED)")
+        mode_context = "Mode: DOCUMENT SEARCH ONLY. You do NOT have access to the internet. You can ONLY answer from uploaded files using 'search_internal_documents'."
+
+    if not tools:
+        print("⚠️ No tools available for this mode.")
 
     history = get_chat_history(request.session_id)
     today = datetime.date.today().strftime("%B %d, %Y")
-
-    # Build dynamic prompt instructions
-    web_instruction = "- You have access to 'search_web' for current events and general facts." if request.use_web else "- Web search is DISABLED. Do not attempt to use 'search_web'."
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", f"""You are DocMind, a professional AI research assistant. Date: {today}.
@@ -324,15 +327,15 @@ async def chat_endpoint(request: ChatRequest):
         STRICT RULES:
         1. GREETINGS: If user says 'hi'/'hello', reply "Hello [User]! I am DocMind." NO TOOLS.
         
-        2. RESEARCH MODE:
-           - You are an interface to the user's uploaded documents.
-           - User Query: "{input}"
-           - YOUR PRIMARY TASK: Call `search_internal_documents` to find the answer.
-           - DO NOT assume you know the answer. SEARCH FIRST.
-           - IF the search tool returns text, USE IT to answer.
-           - IF the search tool returns "No results", ONLY THEN say "I couldn't find that info."
+        2. CURRENT MODE: {mode_context}
         
-        3. FORMAT: Use professional Markdown.
+        3. TASK:
+           - User Query: "{input}"
+           - If in DOCUMENT MODE: Call `search_internal_documents`. USE retrieved text to answer. If no text, say "I couldn't find that in your files."
+           - If in WEB MODE: Call `search_web`. Answer based on search results.
+           - DO NOT Hallucinate. Use the tools provided.
+        
+        4. FORMAT: Use professional Markdown.
         """),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
